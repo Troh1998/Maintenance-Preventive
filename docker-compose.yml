@@ -1,0 +1,29 @@
+services:
+  maintenance-preventive:
+    container_name: maintenance-preventive
+    build: .
+    # Alternative: utiliser l'image pré-construite
+    # image: maintenance-preventive:latest
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./data:/app/data
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      JWT_SECRET: ${JWT_SECRET:-changez_ce_secret_jwt_tres_important}
+      # Configuration Email (optionnel)
+      EMAIL_HOST: ${EMAIL_HOST:-}
+      EMAIL_PORT: ${EMAIL_PORT:-587}
+      EMAIL_USER: ${EMAIL_USER:-}
+      EMAIL_PASSWORD: ${EMAIL_PASSWORD:-}
+      EMAIL_FROM: ${EMAIL_FROM:-Maintenance Préventive <noreply@maintenance.local>}
+      # Alertes
+      ALERT_DAYS_BEFORE: ${ALERT_DAYS_BEFORE:-7}
+    networks:
+      - maintenance-network
+
+networks:
+  maintenance-network:
+    driver: bridge

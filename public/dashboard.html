@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tableau de bord - Maintenance Préventive</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+
+<body>
+    <div class="dashboard">
+        <aside class="sidebar"></aside>
+
+        <main class="main-content">
+            <div class="page-header">
+                <h1>📊 Tableau de bord</h1>
+                <p>Vue d'ensemble de la maintenance préventive</p>
+            </div>
+
+            <!-- Stats Grid -->
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-label">Total Équipements</div>
+                    <div class="stat-value" id="stat-total-equipments">-</div>
+                </div>
+
+                <div class="stat-card success">
+                    <div class="stat-label">Équipements Actifs</div>
+                    <div class="stat-value" id="stat-active-equipments">-</div>
+                </div>
+
+                <div class="stat-card warning">
+                    <div class="stat-label">Interventions ce mois</div>
+                    <div class="stat-value" id="stat-month-interventions">-</div>
+                </div>
+
+                <div class="stat-card success">
+                    <div class="stat-label">Taux de réalisation</div>
+                    <div class="stat-value" id="stat-completion-rate">-</div>
+                </div>
+            </div>
+
+            <!-- Alerts -->
+            <div class="stats-grid">
+                <div class="stat-card danger">
+                    <div class="stat-label">⚠️ Interventions en retard</div>
+                    <div class="stat-value" id="stat-overdue">-</div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="stat-label">📅 À venir (7 jours)</div>
+                    <div class="stat-value" id="stat-upcoming">-</div>
+                </div>
+            </div>
+
+            <!-- Charts -->
+            <div
+                style="display: grid; grid-template-columns: 2fr 1fr; gap: var(--spacing-lg); margin-bottom: var(--spacing-xl);">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Interventions par mois</h3>
+                    </div>
+                    <canvas id="interventions-chart"></canvas>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Équipements par type</h3>
+                    </div>
+                    <canvas id="equipments-chart"></canvas>
+                </div>
+            </div>
+
+            <!-- Recent Interventions -->
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title">Interventions récentes</h3>
+                    <a href="/interventions.html" class="btn btn-sm btn-primary">Voir tout</a>
+                </div>
+                <div class="table-container">
+                    <table id="recent-interventions-table">
+                        <thead>
+                            <tr>
+                                <th>Équipement</th>
+                                <th>Type</th>
+                                <th>Date prévue</th>
+                                <th>Statut</th>
+                                <th>Technicien</th>
+                            </tr>
+                        </thead>
+                        <tbody id="recent-interventions-body">
+                            <tr>
+                                <td colspan="5" class="text-center">Chargement...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Recurring Issues -->
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title">⚠️ Équipements à surveiller</h3>
+                </div>
+                <div class="table-container">
+                    <table id="recurring-issues-table">
+                        <thead>
+                            <tr>
+                                <th>Équipement</th>
+                                <th>Type</th>
+                                <th>Modèle</th>
+                                <th>Interventions (6 mois)</th>
+                                <th>Échecs</th>
+                            </tr>
+                        </thead>
+                        <tbody id="recurring-issues-body">
+                            <tr>
+                                <td colspan="5" class="text-center">Chargement...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="/js/app.js"></script>
+    <script>
+        protectPage();
+        initSidebar();
+
+        let interventionsChart, equipmentsChart;
+
+        async function loadDashboard() {
+            try {
+                // Load stats
+                const statsRes = await apiRequest('/dashboard/stats');
+                const stats = await statsRes.json();
+
+                document.getElementById('stat-total-equipments').textContent = stats.equipments.total;
+                document.getElementById('stat-active-equipments').textContent = stats.equipments.active;
+                document.getElementById('stat-month-interventions').textContent = stats.interventions.thisMonth;
+                document.getElementById('stat-completion-rate').textContent = stats.interventions.completionRate + '%';
+                document.getElementById('stat-overdue').textContent = stats.interventions.overdue;
+                document.getElementById('stat-upcoming').textContent = stats.interventions.upcoming;
+
+                // Load charts
+                await loadCharts();
+
+                // Load recent interventions
+                await loadRecentInterventions();
+
+                // Load recurring issues
+                await loadRecurringIssues();
+
+            } catch (error) {
+                console.error('Erreur chargement dashboard:', error);
+                showNotification('Erreur de chargement des données', 'error');
+            }
+        }
+
+        async function loadCharts() {
+            // Interventions by month
+            const monthRes = await apiRequest('/dashboard/charts/interventions-by-month');
+            const monthData = await monthRes.json();
+
+            const ctx1 = document.getElementById('interventions-chart');
+            if (interventionsChart) interventionsChart.destroy();
+
+            interventionsChart = new Chart(ctx1, {
+                type: 'bar',
+                data: {
+                    labels: monthData.map(d => d.month),
+                    datasets: [
+                        {
+                            label: 'Réalisées',
+                            data: monthData.map(d => d.completed),
+                            backgroundColor: 'rgba(16, 185, 129, 0.8)'
+                        },
+                        {
+                            label: 'Planifiées',
+                            data: monthData.map(d => d.planned),
+                            backgroundColor: 'rgba(55, 136, 216, 0.8)'
+                        },
+                        {
+                            label: 'Non réalisées',
+                            data: monthData.map(d => d.not_done),
+                            backgroundColor: 'rgba(239, 68, 68, 0.8)'
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'bottom' }
+                    }
+                }
+            });
+
+            // Equipments by type
+            const typeRes = await apiRequest('/dashboard/charts/equipments-by-type');
+            const typeData = await typeRes.json();
+
+            const ctx2 = document.getElementById('equipments-chart');
+            if (equipmentsChart) equipmentsChart.destroy();
+
+            equipmentsChart = new Chart(ctx2, {
+                type: 'doughnut',
+                data: {
+                    labels: typeData.map(d => getTypeLabel(d.type)),
+                    datasets: [{
+                        data: typeData.map(d => d.count),
+                        backgroundColor: [
+                            'rgba(55, 136, 216, 0.8)',
+                            'rgba(16, 185, 129, 0.8)',
+                            'rgba(245, 158, 11, 0.8)',
+                            'rgba(239, 68, 68, 0.8)',
+                            'rgba(107, 114, 128, 0.8)'
+                        ]
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'bottom' }
+                    }
+                }
+            });
+        }
+
+        async function loadRecentInterventions() {
+            const res = await apiRequest('/dashboard/recent-interventions?limit=5');
+            const interventions = await res.json();
+
+            const tbody = document.getElementById('recent-interventions-body');
+
+            if (interventions.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" class="text-center">Aucune intervention</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = interventions.map(i => `
+                <tr>
+                    <td>${i.equipment_name || '-'}</td>
+                    <td>${getTypeLabel(i.type)}</td>
+                    <td>${formatDate(i.scheduled_date)}</td>
+                    <td>${getStatusBadge(i.status)}</td>
+                    <td>${i.technician_name || '-'}</td>
+                </tr>
+            `).join('');
+        }
+
+        async function loadRecurringIssues() {
+            const res = await apiRequest('/dashboard/recurring-issues');
+            const issues = await res.json();
+
+            const tbody = document.getElementById('recurring-issues-body');
+
+            if (issues.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" class="text-center">Aucun problème récurrent détecté</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = issues.map(issue => `
+                <tr>
+                    <td>${issue.name}</td>
+                    <td>${getTypeLabel(issue.type)}</td>
+                    <td>${issue.model || '-'}</td>
+                    <td><span class="badge badge-warning">${issue.intervention_count}</span></td>
+                    <td><span class="badge badge-danger">${issue.failed_count}</span></td>
+                </tr>
+            `).join('');
+        }
+
+        // Load dashboard on page load
+        loadDashboard();
+    </script>
+</body>
+
+</html>

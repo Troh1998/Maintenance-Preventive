@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interventions - Maintenance Préventive</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+
+<body>
+    <div class="dashboard">
+        <aside class="sidebar"></aside>
+
+        <main class="main-content">
+            <div class="page-header">
+                <h1>🔧 Gestion des Interventions</h1>
+                <p>Suivi et planification des interventions de maintenance</p>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title">Interventions</h3>
+                    <div style="display: flex; gap: var(--spacing-sm);">
+                        <select id="filter-status" class="form-input" style="width: auto;">
+                            <option value="">Tous les statuts</option>
+                            <option value="planifiee">Planifiée</option>
+                            <option value="en_cours">En cours</option>
+                            <option value="realisee">Réalisée</option>
+                            <option value="non_realisee">Non réalisée</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Équipement</th>
+                                <th>Type</th>
+                                <th>Date prévue</th>
+                                <th>Statut</th>
+                                <th>Technicien</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="interventions-tbody">
+                            <tr>
+                                <td colspan="6" class="text-center">Chargement...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="/js/app.js"></script>
+    <script>
+        protectPage();
+        initSidebar();
+
+        let interventions = [];
+
+        async function loadInterventions(status = '') {
+            try {
+                const url = status ? `/interventions?status=${status}` : '/interventions';
+                const res = await apiRequest(url);
+                interventions = await res.json();
+                renderInterventions();
+            } catch (error) {
+                showNotification('Erreur de chargement', 'error');
+            }
+        }
+
+        function renderInterventions() {
+            const tbody = document.getElementById('interventions-tbody');
+            if (interventions.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" class="text-center">Aucune intervention</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = interventions.map(i => `
+                <tr>
+                    <td>${i.equipment_name || '-'}</td>
+                    <td>${getTypeLabel(i.type)}</td>
+                    <td>${formatDate(i.scheduled_date)}</td>
+                    <td>${getStatusBadge(i.status)}</td>
+                    <td>${i.technician_name || '-'}</td>
+                    <td>
+                        ${i.status === 'planifiee' ? `<button class="btn btn-sm btn-warning" onclick="updateStatus(${i.id}, 'en_cours')">Démarrer</button>` : ''}
+                        ${i.status === 'en_cours' ? `<button class="btn btn-sm btn-success" onclick="updateStatus(${i.id}, 'realisee')">Terminer</button>` : ''}
+                        ${i.status === 'planifiee' ? `<button class="btn btn-sm btn-danger" onclick="updateStatus(${i.id}, 'non_realisee')">Non réalisée</button>` : ''}
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        async function updateStatus(id, status) {
+            try {
+                await apiRequest(`/interventions/${id}/status`, {
+                    method: 'PATCH',
+                    body: JSON.stringify({ status })
+                });
+                showNotification('Statut mis à jour');
+                loadInterventions(document.getElementById('filter-status').value);
+            } catch (error) {
+                showNotification('Erreur de mise à jour', 'error');
+            }
+        }
+
+        document.getElementById('filter-status').addEventListener('change', (e) => {
+            loadInterventions(e.target.value);
+        });
+
+        loadInterventions();
+    </script>
+</body>
+
+</html>

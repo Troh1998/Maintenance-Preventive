@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Équipements - Maintenance Préventive</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+
+<body>
+    <div class="dashboard">
+        <aside class="sidebar"></aside>
+
+        <main class="main-content">
+            <div class="page-header">
+                <h1>💻 Gestion des Équipements</h1>
+                <p>Liste et gestion de tous les équipements informatiques</p>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title">Équipements</h3>
+                    <button class="btn btn-primary btn-sm" onclick="showAddModal()">+ Ajouter un équipement</button>
+                </div>
+
+                <div style="margin-bottom: var(--spacing-lg);">
+                    <input type="text" id="search-input" class="form-input" placeholder="Rechercher un équipement..."
+                        style="max-width: 400px;">
+                </div>
+
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Nom</th>
+                                <th>Type</th>
+                                <th>Modèle</th>
+                                <th>Date d'achat</th>
+                                <th>Utilisateur</th>
+                                <th>Statut</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="equipments-tbody">
+                            <tr>
+                                <td colspan="7" class="text-center">Chargement...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Modal (simplified) -->
+    <div id="equipment-modal" class="hidden"
+        style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1000;">
+        <div class="card" style="max-width: 600px; width: 100%; max-height: 90vh; overflow-y: auto;">
+            <div class="card-header">
+                <h3 class="card-title" id="modal-title">Ajouter un équipement</h3>
+                <button onclick="closeModal()"
+                    style="background: none; border: none; font-size: 1.5rem; cursor: pointer;">×</button>
+            </div>
+            <form id="equipment-form">
+                <input type="hidden" id="equipment-id">
+                <div class="form-group">
+                    <label class="form-label">Nom *</label>
+                    <input type="text" id="name" class="form-input" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Type *</label>
+                    <select id="type" class="form-input" required>
+                        <option value="ordinateur">Ordinateur</option>
+                        <option value="imprimante">Imprimante</option>
+                        <option value="reseau">Réseau</option>
+                        <option value="peripherique">Périphérique</option>
+                        <option value="serveur">Serveur</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Marque</label>
+                    <input type="text" id="brand" class="form-input">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Modèle</label>
+                    <input type="text" id="model" class="form-input">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Numéro de série</label>
+                    <input type="text" id="serial_number" class="form-input">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Date d'achat *</label>
+                    <input type="date" id="purchase_date" class="form-input" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Date d'affectation</label>
+                    <input type="date" id="assignment_date" class="form-input">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Utilisateur affecté</label>
+                    <input type="text" id="assigned_user" class="form-input">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Emplacement</label>
+                    <input type="text" id="location" class="form-input">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Statut</label>
+                    <select id="status" class="form-input">
+                        <option value="actif">Actif</option>
+                        <option value="inactif">Inactif</option>
+                        <option value="en_maintenance">En maintenance</option>
+                        <option value="hors_service">Hors service</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Notes</label>
+                    <textarea id="notes" class="form-input" rows="3"></textarea>
+                </div>
+                <div style="display: flex; gap: var(--spacing-md);">
+                    <button type="submit" class="btn btn-primary">Enregistrer</button>
+                    <button type="button" class="btn btn-secondary" onclick="closeModal()">Annuler</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="/js/app.js"></script>
+    <script>
+        protectPage();
+        initSidebar();
+
+        let equipments = [];
+
+        async function loadEquipments() {
+            try {
+                const res = await apiRequest('/equipments');
+                equipments = await res.json();
+                renderEquipments();
+            } catch (error) {
+                showNotification('Erreur de chargement', 'error');
+            }
+        }
+
+        function renderEquipments() {
+            const tbody = document.getElementById('equipments-tbody');
+            if (equipments.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" class="text-center">Aucun équipement</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = equipments.map(e => `
+                <tr>
+                    <td>${e.name}</td>
+                    <td>${getTypeLabel(e.type)}</td>
+                    <td>${e.model || '-'}</td>
+                    <td>${formatDate(e.purchase_date)}</td>
+                    <td>${e.assigned_user || '-'}</td>
+                    <td>${getStatusBadge(e.status)}</td>
+                    <td>
+                        <button class="btn btn-sm btn-secondary" onclick="editEquipment(${e.id})">Modifier</button>
+                        ${hasRole('admin') ? `<button class="btn btn-sm btn-danger" onclick="deleteEquipment(${e.id})">Supprimer</button>` : ''}
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function showAddModal() {
+            document.getElementById('modal-title').textContent = 'Ajouter un équipement';
+            document.getElementById('equipment-form').reset();
+            document.getElementById('equipment-id').value = '';
+            document.getElementById('equipment-modal').classList.remove('hidden');
+        }
+
+        function closeModal() {
+            document.getElementById('equipment-modal').classList.add('hidden');
+        }
+
+        async function editEquipment(id) {
+            const equipment = equipments.find(e => e.id === id);
+            if (!equipment) return;
+
+            document.getElementById('modal-title').textContent = 'Modifier l\'équipement';
+            document.getElementById('equipment-id').value = equipment.id;
+            document.getElementById('name').value = equipment.name;
+            document.getElementById('type').value = equipment.type;
+            document.getElementById('brand').value = equipment.brand || '';
+            document.getElementById('model').value = equipment.model || '';
+            document.getElementById('serial_number').value = equipment.serial_number || '';
+            document.getElementById('purchase_date').value = equipment.purchase_date;
+            document.getElementById('assignment_date').value = equipment.assignment_date || '';
+            document.getElementById('assigned_user').value = equipment.assigned_user || '';
+            document.getElementById('location').value = equipment.location || '';
+            document.getElementById('status').value = equipment.status;
+            document.getElementById('notes').value = equipment.notes || '';
+            document.getElementById('equipment-modal').classList.remove('hidden');
+        }
+
+        async function deleteEquipment(id) {
+            if (!confirm('Êtes-vous sûr de vouloir supprimer cet équipement ?')) return;
+
+            try {
+                await apiRequest(`/equipments/${id}`, { method: 'DELETE' });
+                showNotification('Équipement supprimé');
+                loadEquipments();
+            } catch (error) {
+                showNotification('Erreur de suppression', 'error');
+            }
+        }
+
+        document.getElementById('equipment-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const id = document.getElementById('equipment-id').value;
+            const data = {
+                name: document.getElementById('name').value,
+                type: document.getElementById('type').value,
+                brand: document.getElementById('brand').value,
+                model: document.getElementById('model').value,
+                serial_number: document.getElementById('serial_number').value,
+                purchase_date: document.getElementById('purchase_date').value,
+                assignment_date: document.getElementById('assignment_date').value,
+                assigned_user: document.getElementById('assigned_user').value,
+                location: document.getElementById('location').value,
+                status: document.getElementById('status').value,
+                notes: document.getElementById('notes').value
+            };
+
+            try {
+                if (id) {
+                    await apiRequest(`/equipments/${id}`, {
+                        method: 'PUT',
+                        body: JSON.stringify(data)
+                    });
+                    showNotification('Équipement modifié');
+                } else {
+                    await apiRequest('/equipments', {
+                        method: 'POST',
+                        body: JSON.stringify(data)
+                    });
+                    showNotification('Équipement créé');
+                }
+                closeModal();
+                loadEquipments();
+            } catch (error) {
+                showNotification('Erreur d\'enregistrement', 'error');
+            }
+        });
+
+        document.getElementById('search-input').addEventListener('input', (e) => {
+            const search = e.target.value.toLowerCase();
+            const filtered = equipments.filter(eq =>
+                eq.name.toLowerCase().includes(search) ||
+                (eq.model && eq.model.toLowerCase().includes(search)) ||
+                (eq.assigned_user && eq.assigned_user.toLowerCase().includes(search))
+            );
+
+            const tbody = document.getElementById('equipments-tbody');
+            tbody.innerHTML = filtered.map(e => `
+                <tr>
+                    <td>${e.name}</td>
+                    <td>${getTypeLabel(e.type)}</td>
+                    <td>${e.model || '-'}</td>
+                    <td>${formatDate(e.purchase_date)}</td>
+                    <td>${e.assigned_user || '-'}</td>
+                    <td>${getStatusBadge(e.status)}</td>
+                    <td>
+                        <button class="btn btn-sm btn-secondary" onclick="editEquipment(${e.id})">Modifier</button>
+                        ${hasRole('admin') ? `<button class="btn btn-sm btn-danger" onclick="deleteEquipment(${e.id})">Supprimer</button>` : ''}
+                    </td>
+                </tr>
+            `).join('');
+        });
+
+        loadEquipments();
+    </script>
+</body>
+
+</html>
